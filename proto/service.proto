@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package services;
+
+// Сервис для работы с PDF
+service PDFService {
+  // Создание PDF документа для матча
+  rpc CreateMatchPDF (MatchPDFRequest) returns (PDFResponse) {}
+  // Создание PDF документа для турнира
+  rpc CreateTournamentPDF (TournamentPDFRequest) returns (PDFResponse) {}
+  // Получение статуса генерации PDF
+  rpc GetPDFStatus (PDFStatusRequest) returns (PDFStatusResponse) {}
+}
+
+// Сервис рекомендаций
+service RecommenderService {
+  // Получение рекомендаций для пользователя
+  rpc GetRecommendations (RecommendationRequest) returns (RecommendationResponse) {}
+  // Обновление данных пользователя
+  rpc UpdateUserData (UserDataRequest) returns (UserDataResponse) {}
+}
+
+// Запрос на создание PDF для матча
+message MatchPDFRequest {
+  string match_id = 1;
+  string stage_id = 2;
+  string tournament_id = 3;
+  string sport = 4;
+  repeated Team teams = 5;
+  Score score = 6;
+  repeated Goal goals = 7;
+  repeated Penalty after_match_penalties = 8;
+  Location location = 9;
+  string date = 10;
+  bool is_finished = 11;
+}
+
+// Запрос на создание PDF для турнира
+message TournamentPDFRequest {
+  string tournament_id = 1;
+  string name = 2;
+  string sport = 3;
+  string organization_name = 4;
+  string logo = 5;
+  string description = 6;
+  string city = 7;
+  string registration_deadline = 8;
+  bool is_stopped = 9;
+  repeated Stage stages = 10;
+  repeated Team teams = 11;
+  repeated Slot slots = 12;
+  repeated Group groups = 13;
+}
+
+// Структуры данных
+message Team {
+  string team_id = 1;
+  string name = 2;
+  string logo = 3;
+  optional string application_status = 4;
+  optional bool is_cap = 5;
+  optional string invitation_status = 6;
+  string sport = 7;
+}
+
+message Score {
+  int32 team_1 = 1;
+  int32 team_2 = 2;
+}
+
+message Goal {
+  string team_id = 1;
+  string user_id = 2;
+  int32 ser_number = 3;
+  string time = 4;
+  bool is_penalty = 5;
+}
+
+message Penalty {
+  string user_id = 1;
+  string team_id = 2;
+  bool is_success = 3;
+}
+
+message Location {
+  string name = 1;
+  string address = 2;
+  string city = 3;
+}
+
+message Stage {
+  string stage_id = 1;
+  string name = 2;
+  bool is_published = 3;
+  int32 best_place = 4;
+  int32 worst_place = 5;
+  repeated Match matches = 6;
+}
+
+message Match {
+  repeated Team teams = 1;
+  Score score = 2;
+  repeated Goal goals = 3;
+  repeated Penalty after_match_penalties = 4;
+  Location location = 5;
+  string date = 6;
+  bool is_finished = 7;
+}
+
+message Slot {
+  string slot_id = 1;
+  string tournament_id = 2;
+  string date = 3;
+  string location_id = 4;
+}
+
+message Group {
+  string group_id = 1;
+  string name = 2;
+  string index = 3;
+  int32 count_teams = 4;
+  repeated Team teams = 5;
+}
+
+// Ответ на создание PDF
+message PDFResponse {
+  string task_id = 1;
+  string status = 2;
+}
+
+// Запрос статуса PDF
+message PDFStatusRequest {
+  string task_id = 1;
+}
+
+// Ответ со статусом PDF
+message PDFStatusResponse {
+  string status = 1;
+  string pdf_url = 2;
+  string error_message = 3;
+}
+
+// Запрос рекомендаций
+message RecommendationRequest {
+  string user_id = 1;
+  int32 num_recommendations = 2;
+  map<string, string> context = 3;
+}
+
+// Ответ с рекомендациями
+message RecommendationResponse {
+  repeated Recommendation recommendations = 1;
+}
+
+// Структура рекомендации
+message Recommendation {
+  string item_id = 1;
+  float score = 2;
+  map<string, string> metadata = 3;
+}
+
+// Запрос на обновление данных пользователя
+message UserDataRequest {
+  string user_id = 1;
+  UserData user_data = 2;
+}
+
+// Данные пользователя
+message UserData {
+  string name = 1;
+  string surname = 2;
+  repeated OrgInfo org_info = 3;
+  repeated Team teams = 4;
+  repeated Tournament tournaments = 5;
+}
+
+message OrgInfo {
+  string name = 1;
+  string role = 2;
+  bool is_ref = 3;
+}
+
+message Tournament {
+  string name = 1;
+  string logo = 2;
+  string team_name = 3;
+  string sport = 4;
+  string city = 5;
+}
+
+// Ответ на обновление данных пользователя
+message UserDataResponse {
+  bool success = 1;
+  string message = 2;
+} 

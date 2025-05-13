@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  grpc-server:
+    build: .
+    ports:
+      - "50051:50051"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=your_redis_password
+      - REDIS_TTL=3600
+      - GRPC_HOST=[::]
+      - GRPC_PORT=50051
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    volumes:
+      - ./src/temp:/app/temp
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass your_redis_password
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data: 

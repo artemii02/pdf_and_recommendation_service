@@ -1,0 +1,11 @@
+grpcio==1.62.0
+grpcio-tools==1.62.0
+redis==5.0.1
+requests==2.31.0
+python-dotenv==1.0.0
+reportlab>=4.0.9
+scikit-learn>=1.4.1
+numpy>=1.26.4
+protobuf>=4.21.6,<5.0dev
+pandas>=2.2.0
+pytest>=8.0.0 
