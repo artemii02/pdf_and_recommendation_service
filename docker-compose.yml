@@ -28,4 +28,9 @@ services:
       - redis_data:/data
 
 volumes:
-  redis_data: 
+  redis_data:
+
+networks:
+  default:
+    name: shared-network
+    external: true
