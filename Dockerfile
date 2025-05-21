@@ -14,9 +14,6 @@ COPY requirements.txt .
 # Установка зависимостей
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Создание необходимых директорий
-RUN mkdir -p ./src/app/proto
-
 # Копирование исходного кода
 COPY src/ ./src/
 

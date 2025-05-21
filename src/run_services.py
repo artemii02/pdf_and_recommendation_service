@@ -2,9 +2,12 @@ import os
 import grpc
 import time
 from concurrent import futures
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+import service_pb2
+import service_pb2_grpc
 from app.pdf_service.pdf_service import PDFServicer
 from app.recommender.recommender_service import RecommenderServicer
-from app.proto import service_pb2_grpc
 
 def serve():
     # Создаем gRPC сервер

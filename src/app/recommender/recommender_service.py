@@ -2,13 +2,15 @@ import os
 import json
 import logging
 import redis
-from app.proto import service_pb2, service_pb2_grpc
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) )
+import service_pb2
+import service_pb2_grpc
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 from datetime import datetime, timedelta
 from test_data.sample_items import load_sample_items
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,6 @@ class UserProfile:
                 'name': team.name,
                 'logo': team.logo,
                 'sport': team.sport,
-                'is_cap': team.is_cap,
                 'invitation_status': team.invitation_status
             }
             for team in user_data.teams
@@ -47,9 +48,10 @@ class UserProfile:
             {
                 'name': t.name,
                 'logo': t.logo,
-                'team_name': t.team_name,
+                'organization_name': t.organization_name,
                 'sport': t.sport,
-                'city': t.city
+                'city': t.city,
+                'description': t.description
             }
             for t in user_data.tournaments
         ]
@@ -90,8 +92,6 @@ class UserProfile:
         # Добавляем информацию о командах с учетом роли
         for team in self.teams:
             profile_text += f"{team['name']} {team['sport']} "
-            if team['is_cap']:
-                profile_text += "captain "
             if team['invitation_status']:
                 profile_text += f"{team['invitation_status']} "
         
@@ -204,14 +204,14 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
             # Инвалидация кэша
             self.redis_client.delete(f'recommendations:{user_id}')
             return service_pb2.UserDataResponse(
-                success=True,
-                message='User data updated successfully'
+                user_id=user_id,
+                user_data=user_data
             )
         except Exception as e:
             logger.error(f'Error updating user data: {str(e)}')
             return service_pb2.UserDataResponse(
-                success=False,
-                message=f'Error updating user data: {str(e)}'
+                user_id=user_id,
+                user_data=None
             )
     
     def _get_cached_recommendations(self, user_id):

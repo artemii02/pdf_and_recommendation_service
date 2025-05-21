@@ -9,7 +9,10 @@ from reportlab.lib import colors
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.charts.barcharts import VerticalBarChart
-from app.proto import service_pb2, service_pb2_grpc
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) )
+import service_pb2
+import service_pb2_grpc
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Table, TableStyle

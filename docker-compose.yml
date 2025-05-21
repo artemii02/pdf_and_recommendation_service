@@ -18,6 +18,8 @@ services:
       - redis
     volumes:
       - ./src/temp:/app/temp
+    networks:
+      - shared_network
 
   redis:
     image: redis:7.2-alpine
@@ -26,6 +28,12 @@ services:
     command: redis-server --requirepass your_redis_password
     volumes:
       - redis_data:/data
+    networks:
+      - shared_network
 
 volumes:
-  redis_data: 
+  redis_data:
+
+networks:
+  shared_network:
+    external: true

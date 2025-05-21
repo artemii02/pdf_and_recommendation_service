@@ -1,6 +1,10 @@
 import grpc
 import json
-from app.proto import service_pb2, service_pb2_grpc
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+import service_pb2
+import service_pb2_grpc
 from datetime import datetime, timedelta
 from test_data.full_sample import get_test_match, get_test_tournaments, get_test_teams
 
@@ -23,17 +27,19 @@ def test_recommender_service():
         'teams': [
             {
                 'name': 'Спартак',
-                'logo': 'spartak.png',
+                'logo': b'spartak.png',
                 'sport': 'football',
-                'is_cap': True,
                 'invitation_status': 'accepted'
             }
         ],
         'tournaments': [
             {
                 'name': 'Кубок Москвы 2024',
-                'logo': 'cup.png',
-                'team_name': 'Спартак'
+                'logo': b'cup.png',
+                'organization_name': 'СпортКлуб',
+                'sport': 'football',
+                'city': 'Москва',
+                'description': 'Ежегодный турнир'
             }
         ]
     }
@@ -42,7 +48,7 @@ def test_recommender_service():
         # Обновление данных пользователя
         update_request = service_pb2.UserDataRequest(
             user_id='test_user_1',
-            user_data=user_data
+            user_data=service_pb2.UserData(**user_data)
         )
         
         update_response = recommender_stub.UpdateUserData(update_request)
@@ -91,20 +97,22 @@ def test_pdf_service():
             stage_id=match_data['stage_id'],
             tournament_id=match_data['tournament_id'],
             sport=match_data['sport'],
-            teams=[service_pb2.Team(
+            teams=[service_pb2.TeamInfo(
                 team_id=t['team_id'], name=t['name'], logo=t['logo'], sport=t['sport']
             ) for t in match_data['teams']],
-            score=service_pb2.Score(
+            score=service_pb2.ScoreInfo(
                 team_1=match_data['score']['team_1'],
                 team_2=match_data['score']['team_2']
             ),
-            goals=[service_pb2.Goal(
-                team_id=g['team_id'], user_id=g['user_id'], ser_number=g['ser_number'], time=g['time'], is_penalty=g['is_penalty']
+            goals=[service_pb2.GoalInfo(
+                team_id=g['team_id'], user_name=g['user_name'], user_surname=g['user_surname'],
+                set_number=g['set_number'], time=g['time'], is_penalty=g['is_penalty']
             ) for g in match_data['goals']],
-            after_match_penalties=[service_pb2.Penalty(
-                user_id=p['user_id'], team_id=p['team_id'], is_success=p['is_success']
+            after_match_penalties=[service_pb2.AfterMatchPenaltyInfo(
+                team_id=p['team_id'], user_name=p['user_name'], user_surname=p['user_surname'],
+                is_success=p['is_success']
             ) for p in match_data['after_match_penalties']],
-            location=service_pb2.Location(
+            location=service_pb2.LocationInfo(
                 name=match_data['location']['name'],
                 address=match_data['location']['address'],
                 city=match_data['location']['city']
@@ -114,9 +122,6 @@ def test_pdf_service():
         )
         response = pdf_stub.CreateMatchPDF(request)
         print(f'PDF для матча по {sport}: task_id={response.task_id}, status={response.status}')
-        # Проверка статуса
-        status_response = pdf_stub.GetPDFStatus(service_pb2.PDFStatusRequest(task_id=response.task_id))
-        print(f'  Статус: {status_response.status}, PDF: {status_response.pdf_url}, Ошибка: {status_response.error_message}')
 
     # Тест: генерация PDF для турнира по всем видам спорта
     print('\n=== Тестирование PDF для турниров по всем видам спорта ===')
@@ -139,8 +144,6 @@ def test_pdf_service():
         )
         response = pdf_stub.CreateTournamentPDF(request)
         print(f'PDF для турнира по {t["sport"]}: task_id={response.task_id}, status={response.status}')
-        status_response = pdf_stub.GetPDFStatus(service_pb2.PDFStatusRequest(task_id=response.task_id))
-        print(f'  Статус: {status_response.status}, PDF: {status_response.pdf_url}, Ошибка: {status_response.error_message}')
 
 if __name__ == '__main__':
     print('Тестирование сервиса рекомендаций:')

@@ -1,5 +1,9 @@
 import grpc
-from app.proto import service_pb2, service_pb2_grpc
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+import service_pb2
+import service_pb2_grpc
 
 def test_recommender_service():
     channel = grpc.insecure_channel('localhost:50051')
@@ -102,7 +106,7 @@ def test_recommender_service():
             )
         )
         update_response = stub.UpdateUserData(update_request)
-        print(f'Обновление данных: {"успешно" if update_response.success else "ошибка"} ({update_response.message})')
+        print(f'Обновление данных: {"успешно" if update_response.user_data else "ошибка"}')
 
         # Получение рекомендаций
         rec_request = service_pb2.RecommendationRequest(

@@ -14,7 +14,8 @@ def get_test_teams():
             'team_id': f'team_{i+1}',
             'name': f'Команда {i+1} ({sport})',
             'logo': f'logo_{i+1}.png',
-            'sport': sport
+            'sport': sport,
+            'invitation_status': 'accepted'
         }
         for i, sport in enumerate(sports)
     ]
@@ -23,81 +24,99 @@ def get_test_tournaments():
     sports = get_all_sports()
     return [
         {
-            'tournament_id': f'tour_{i+1}',
-            'name': f'Турнир по {sport}',
-            'sport': sport,
-            'organization_name': f'Оргкомитет {i+1}',
-            'logo': f'logo_tour_{i+1}.png',
-            'description': f'Описание турнира по {sport}. Лучшие команды города сразятся за кубок!',
+            'tournament_id': 'tournament_1',
+            'name': 'Кубок Москвы 2024',
+            'sport': 'football',
+            'organization_name': 'СпортКлуб',
+            'logo': b'cup.png',
+            'description': 'Ежегодный турнир по футболу',
             'city': 'Москва',
-            'registration_deadline': '2024-12-31T23:59:59Z',
-            'is_stopped': False,
-            'stages': [
-                {
-                    'stage_id': 'stage_1',
-                    'name': 'Групповой этап',
-                    'is_published': True,
-                    'best_place': 1,
-                    'worst_place': 4,
-                    'matches': [get_test_match()]
-                },
-                {
-                    'stage_id': 'stage_2',
-                    'name': 'Плей-офф',
-                    'is_published': False,
-                    'best_place': 1,
-                    'worst_place': 2,
-                    'matches': []
-                }
-            ],
-            'teams': get_test_teams(),
-            'slots': [],
-            'groups': [
-                {
-                    'group_id': 'group_1',
-                    'name': 'Группа A',
-                    'index': 'A',
-                    'count_teams': 2,
-                    'teams': get_test_teams()[:2]
-                },
-                {
-                    'group_id': 'group_2',
-                    'name': 'Группа B',
-                    'index': 'B',
-                    'count_teams': 2,
-                    'teams': get_test_teams()[2:4]
-                }
-            ]
+            'registration_deadline': '2024-03-01T00:00:00Z',
+            'is_stopped': False
+        },
+        {
+            'tournament_id': 'tournament_2',
+            'name': 'Чемпионат России 2024',
+            'sport': 'basketball',
+            'organization_name': 'Баскетбол РФ',
+            'logo': b'basketball.png',
+            'description': 'Чемпионат России по баскетболу',
+            'city': 'Москва',
+            'registration_deadline': '2024-02-15T00:00:00Z',
+            'is_stopped': False
         }
-        for i, sport in enumerate(sports)
     ]
 
 def get_test_match():
     return {
         'match_id': 'match_1',
         'stage_id': 'stage_1',
-        'tournament_id': 'tour_1',
+        'tournament_id': 'tournament_1',
         'sport': 'football',
         'teams': [
-            {'team_id': 'team_1', 'name': 'Команда 1', 'logo': '', 'sport': 'football'},
-            {'team_id': 'team_2', 'name': 'Команда 2', 'logo': '', 'sport': 'football'}
+            {
+                'team_id': 'team_1',
+                'name': 'Спартак',
+                'logo': b'spartak.png',
+                'sport': 'football'
+            },
+            {
+                'team_id': 'team_2',
+                'name': 'ЦСКА',
+                'logo': b'cska.png',
+                'sport': 'football'
+            }
         ],
-        'score': {'team_1': 3, 'team_2': 2},
+        'score': {
+            'team_1': 2,
+            'team_2': 1
+        },
         'goals': [
-            {'team_id': 'team_1', 'user_id': 'user_1', 'ser_number': 1, 'time': '12:00', 'is_penalty': False},
-            {'team_id': 'team_2', 'user_id': 'user_2', 'ser_number': 2, 'time': '34:00', 'is_penalty': False},
-            {'team_id': 'team_1', 'user_id': 'user_3', 'ser_number': 3, 'time': '45:00', 'is_penalty': False},
-            {'team_id': 'team_2', 'user_id': 'user_4', 'ser_number': 4, 'time': '60:00', 'is_penalty': True},
-            {'team_id': 'team_1', 'user_id': 'user_5', 'ser_number': 5, 'time': '78:00', 'is_penalty': False}
+            {
+                'team_id': 'team_1',
+                'user_name': 'Иван',
+                'user_surname': 'Петров',
+                'set_number': 1,
+                'time': '15:00',
+                'is_penalty': False
+            },
+            {
+                'team_id': 'team_1',
+                'user_name': 'Алексей',
+                'user_surname': 'Иванов',
+                'set_number': 1,
+                'time': '35:00',
+                'is_penalty': False
+            },
+            {
+                'team_id': 'team_2',
+                'user_name': 'Дмитрий',
+                'user_surname': 'Смирнов',
+                'set_number': 2,
+                'time': '60:00',
+                'is_penalty': True
+            }
         ],
         'after_match_penalties': [
-            {'user_id': 'user_1', 'team_id': 'team_1', 'is_success': True},
-            {'user_id': 'user_2', 'team_id': 'team_2', 'is_success': False},
-            {'user_id': 'user_3', 'team_id': 'team_1', 'is_success': True},
-            {'user_id': 'user_4', 'team_id': 'team_2', 'is_success': True}
+            {
+                'team_id': 'team_1',
+                'user_name': 'Иван',
+                'user_surname': 'Петров',
+                'is_success': True
+            },
+            {
+                'team_id': 'team_2',
+                'user_name': 'Дмитрий',
+                'user_surname': 'Смирнов',
+                'is_success': False
+            }
         ],
-        'location': {'name': 'Стадион Центральный', 'address': 'ул. Спортивная, 1', 'city': 'Москва'},
-        'date': '2024-06-01T15:00:00Z',
+        'location': {
+            'name': 'Стадион Лужники',
+            'address': 'ул. Лужники, 24',
+            'city': 'Москва'
+        },
+        'date': '2024-03-15T15:00:00Z',
         'is_finished': True
     }
 

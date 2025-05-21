@@ -8,8 +8,6 @@ service PDFService {
   rpc CreateMatchPDF (MatchPDFRequest) returns (PDFResponse) {}
   // Создание PDF документа для турнира
   rpc CreateTournamentPDF (TournamentPDFRequest) returns (PDFResponse) {}
-  // Получение статуса генерации PDF
-  rpc GetPDFStatus (PDFStatusRequest) returns (PDFStatusResponse) {}
 }
 
 // Сервис рекомендаций
@@ -18,6 +16,7 @@ service RecommenderService {
   rpc GetRecommendations (RecommendationRequest) returns (RecommendationResponse) {}
   // Обновление данных пользователя
   rpc UpdateUserData (UserDataRequest) returns (UserDataResponse) {}
+  rpc GetAvailableTournaments (Empty) returns (TournamentsResponse) {}
 }
 
 // Запрос на создание PDF для матча
@@ -26,11 +25,11 @@ message MatchPDFRequest {
   string stage_id = 2;
   string tournament_id = 3;
   string sport = 4;
-  repeated Team teams = 5;
-  Score score = 6;
-  repeated Goal goals = 7;
-  repeated Penalty after_match_penalties = 8;
-  Location location = 9;
+  repeated TeamInfo teams = 5;
+  ScoreInfo score = 6;
+  repeated GoalInfo goals = 7;
+  repeated AfterMatchPenaltyInfo after_match_penalties = 8;
+  LocationInfo location = 9;
   string date = 10;
   bool is_finished = 11;
 }
@@ -41,103 +40,107 @@ message TournamentPDFRequest {
   string name = 2;
   string sport = 3;
   string organization_name = 4;
-  string logo = 5;
+  bytes logo = 5;
   string description = 6;
   string city = 7;
   string registration_deadline = 8;
   bool is_stopped = 9;
-  repeated Stage stages = 10;
-  repeated Team teams = 11;
-  repeated Slot slots = 12;
-  repeated Group groups = 13;
+  repeated StageInfo stages = 10;
+  repeated TeamInfo teams = 11;
+  repeated SlotInfo slots = 12;
+  repeated GroupInfo groups = 13;
+}
+
+// Ответ на создание PDF
+message PDFResponse {
+    string file_name = 1;
+    bytes file_data = 2;
+    string mime_type = 3;
+    string status = 4;
+    string task_id = 5;
+}
+
+
+message TournamentsResponse {
+    repeated TournamentInfo tournaments = 1;
 }
 
 // Структуры данных
-message Team {
+message TeamInfo {
   string team_id = 1;
   string name = 2;
-  string logo = 3;
-  optional string application_status = 4;
-  optional bool is_cap = 5;
-  optional string invitation_status = 6;
-  string sport = 7;
+  bytes logo = 3;
+  string sport = 4;
+  optional string invitation_status = 5;
 }
 
-message Score {
+message ScoreInfo {
   int32 team_1 = 1;
   int32 team_2 = 2;
 }
 
-message Goal {
+message GoalInfo {
   string team_id = 1;
-  string user_id = 2;
-  int32 ser_number = 3;
-  string time = 4;
-  bool is_penalty = 5;
+  string user_name = 2;
+  string user_surname = 3;
+  int32 set_number = 4;
+  string time = 5;
+  bool is_penalty = 6;
 }
 
-message Penalty {
-  string user_id = 1;
-  string team_id = 2;
-  bool is_success = 3;
+message AfterMatchPenaltyInfo {
+  string team_id = 1;
+  string user_name = 2;
+  string user_surname = 3;
+  bool is_success = 4;
 }
 
-message Location {
+message LocationInfo {
   string name = 1;
   string address = 2;
   string city = 3;
 }
 
-message Stage {
+message StageInfo {
   string stage_id = 1;
   string name = 2;
   bool is_published = 3;
   int32 best_place = 4;
   int32 worst_place = 5;
-  repeated Match matches = 6;
+  repeated MatchInfo matches = 6;
 }
 
-message Match {
-  repeated Team teams = 1;
-  Score score = 2;
-  repeated Goal goals = 3;
-  repeated Penalty after_match_penalties = 4;
-  Location location = 5;
+message MatchInfo {
+  repeated TeamInfo teams = 1;
+  ScoreInfo score = 2;
+  repeated GoalInfo goals = 3;
+  repeated AfterMatchPenaltyInfo after_match_penalties = 4;
+  LocationInfo location = 5;
   string date = 6;
   bool is_finished = 7;
 }
 
-message Slot {
+message SlotInfo {
   string slot_id = 1;
   string tournament_id = 2;
   string date = 3;
   string location_id = 4;
 }
 
-message Group {
+message GroupInfo {
   string group_id = 1;
   string name = 2;
-  string index = 3;
-  int32 count_teams = 4;
-  repeated Team teams = 5;
+  int32 count_teams = 3;
+  repeated TeamInfo teams = 4;
 }
 
-// Ответ на создание PDF
-message PDFResponse {
-  string task_id = 1;
-  string status = 2;
-}
-
-// Запрос статуса PDF
-message PDFStatusRequest {
-  string task_id = 1;
-}
-
-// Ответ со статусом PDF
-message PDFStatusResponse {
-  string status = 1;
-  string pdf_url = 2;
-  string error_message = 3;
+message TournamentInfo {
+  string name = 1;
+  bytes logo = 2;
+  string organization_name = 3;
+  string sport = 4;
+  string city = 5;
+  string description = 6;
 }
 
 // Запрос рекомендаций
@@ -165,13 +168,19 @@ message UserDataRequest {
   UserData user_data = 2;
 }
 
+// Ответ на обновление данных пользователя
+message UserDataResponse {
+  string user_id = 1;
+  UserData user_data = 2;
+}
+
 // Данные пользователя
 message UserData {
   string name = 1;
   string surname = 2;
   repeated OrgInfo org_info = 3;
-  repeated Team teams = 4;
-  repeated Tournament tournaments = 5;
+  repeated TeamInfo teams = 4;
+  repeated TournamentInfo tournaments = 5;
 }
 
 message OrgInfo {
@@ -180,16 +189,6 @@ message OrgInfo {
   bool is_ref = 3;
 }
 
-message Tournament {
-  string name = 1;
-  string logo = 2;
-  string team_name = 3;
-  string sport = 4;
-  string city = 5;
-}
+message Empty {
 
-// Ответ на обновление данных пользователя
-message UserDataResponse {
-  bool success = 1;
-  string message = 2;
-} 
+}
