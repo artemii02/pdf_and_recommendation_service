@@ -35,5 +35,9 @@ volumes:
   redis_data:
 
 networks:
+<<<<<<< HEAD
   shared_network:
+=======
+  shared-network:
+>>>>>>> 7379b8086ed71e7aa42b040c93e4bad26e83810e
     external: true
