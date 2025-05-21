@@ -19,7 +19,7 @@ services:
     volumes:
       - ./src/temp:/app/temp
     networks:
-      - shared_network
+      - shared-network
 
   redis:
     image: redis:7.2-alpine
@@ -29,15 +29,11 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - shared_network
+      - shared-network
 
 volumes:
   redis_data:
 
 networks:
-<<<<<<< HEAD
-  shared_network:
-=======
   shared-network:
->>>>>>> 7379b8086ed71e7aa42b040c93e4bad26e83810e
     external: true

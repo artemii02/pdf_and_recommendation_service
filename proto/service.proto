@@ -45,10 +45,24 @@ message TournamentPDFRequest {
   string city = 7;
   string registration_deadline = 8;
   bool is_stopped = 9;
-  repeated Stage stages = 10;
-  repeated Team teams = 11;
-  repeated Slot slots = 12;
-  repeated Group groups = 13;
+  repeated StageInfo stages = 10;
+  repeated TeamInfo teams = 11;
+  repeated SlotInfo slots = 12;
+  repeated GroupInfo groups = 13;
+}
+
+// Ответ на создание PDF
+message PDFResponse {
+    string task_id = 1;
+    string file_name = 2;
+    bytes file_data = 3;
+    string mime_type = 4;
+    string status = 5;
+}
+
+
+message TournamentsResponse {
+    repeated TournamentInfo tournaments = 1;
 }
 
 // Структуры данных
@@ -150,11 +164,6 @@ message Recommendation {
 
 // Запрос на обновление данных пользователя
 message UserDataRequest {
-  string user_id = 1;
-}
-
-// Ответ на обновление данных пользователя
-message UserDataResponse {
   string user_id = 1;
   UserData user_data = 2;
 }

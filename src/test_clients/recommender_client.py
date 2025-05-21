@@ -20,10 +20,10 @@ def test_recommender_service():
                     {'name': 'Футбольный клуб', 'role': 'Игрок', 'is_ref': False}
                 ],
                 'teams': [
-                    {'name': 'Спартак', 'logo': 'spartak.png', 'sport': 'football', 'is_cap': True, 'invitation_status': 'accepted'}
+                    {'name': 'Спартак', 'logo': b'spartak.png', 'sport': 'football', 'invitation_status': 'accepted'}
                 ],
                 'tournaments': [
-                    {'name': 'Кубок Москвы', 'logo': 'cup.png', 'team_name': 'Спартак', 'sport': 'football', 'city': 'Москва'}
+                    {'name': 'Кубок Москвы', 'logo': b'cup.png', 'organization_name': 'Спартак', 'sport': 'football', 'city': 'Москва', 'description': 'Турнир по футболу'}
                 ]
             }
         },
@@ -34,10 +34,10 @@ def test_recommender_service():
                 'surname': 'Сидоров',
                 'org_info': [],
                 'teams': [
-                    {'name': 'Зенит', 'logo': 'zenit.png', 'sport': 'basketball', 'is_cap': False, 'invitation_status': ''}
+                    {'name': 'Зенит', 'logo': b'zenit.png', 'sport': 'basketball', 'invitation_status': ''}
                 ],
                 'tournaments': [
-                    {'name': 'Чемпионат СПб', 'logo': 'bball.png', 'team_name': 'Зенит', 'sport': 'basketball', 'city': 'Санкт-Петербург'}
+                    {'name': 'Чемпионат СПб', 'logo': b'bball.png', 'organization_name': 'Зенит', 'sport': 'basketball', 'city': 'Санкт-Петербург', 'description': 'Турнир по баскетболу'}
                 ]
             }
         },
@@ -96,13 +96,8 @@ def test_recommender_service():
                 name=user['user_data']['name'],
                 surname=user['user_data']['surname'],
                 org_info=[service_pb2.OrgInfo(**org) for org in user['user_data']['org_info']],
-                teams=[service_pb2.Team(
-                    name=team['name'], logo=team['logo'], sport=team['sport'],
-                    is_cap=team['is_cap'], invitation_status=team['invitation_status']
-                ) for team in user['user_data']['teams']],
-                tournaments=[service_pb2.Tournament(
-                    name=t['name'], logo=t['logo'], team_name=t['team_name'], sport=t['sport'], city=t['city']
-                ) for t in user['user_data']['tournaments']]
+                teams=[service_pb2.TeamInfo(**team) for team in user['user_data']['teams']],
+                tournaments=[service_pb2.TournamentInfo(**t) for t in user['user_data']['tournaments']]
             )
         )
         update_response = stub.UpdateUserData(update_request)

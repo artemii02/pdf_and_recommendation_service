@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import service_pb2
 import service_pb2_grpc
 from datetime import datetime, timedelta
-from test_data.full_sample import get_test_match, get_test_tournaments, get_test_teams
+from src.test_data.full_sample import get_test_match, get_test_tournaments, get_test_teams
 
 def test_recommender_service():
     # Подключение к сервису рекомендаций
@@ -52,7 +52,7 @@ def test_recommender_service():
         )
         
         update_response = recommender_stub.UpdateUserData(update_request)
-        print(f'Обновление данных пользователя: {"успешно" if update_response.success else "ошибка"}')
+        print(f'Обновление данных пользователя: {"успешно" if update_response.user_data else "ошибка"}')
         
         # Получение рекомендаций
         rec_request = service_pb2.RecommendationRequest(
