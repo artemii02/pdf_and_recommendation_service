@@ -106,19 +106,6 @@ class UserProfile:
         
         return profile_text
 
-# --- Класс-заглушка для интеграции с Java API ---
-# В будущем замените методы на реальные запросы к Java API
-class JavaAPIClient:
-    def get_user_participation(self, user_id):
-        # TODO: реализовать получение истории участия пользователя через Java API
-        return []
-    def get_user_teams(self, user_id):
-        # TODO: реализовать получение команд пользователя через Java API
-        return []
-    def get_user_search_history(self, user_id):
-        # TODO: реализовать получение истории поиска пользователя через Java API
-        return []
-
 # --- Функция для сериализации numpy.ndarray и других объектов ---
 def to_serializable(obj):
     if isinstance(obj, np.ndarray):
@@ -262,8 +249,23 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
             logger.warning(f'Нет профиля пользователя для user_id={user_id}')
             return []
 
-        # Получаем доступные турниры
-        available_tournaments = self._get_available_tournaments()
+        # Получаем доступные турниры через Java API
+        try:
+            response = self.java_recommender_client.GetAvailableTournaments(service_pb2.Empty())
+            available_tournaments = [
+                {
+                    'id': t.name,  # Используйте t.id, если есть, иначе t.name
+                    'name': t.name,
+                    'sport': t.sport,
+                    'city': t.city,
+                    'description': t.description
+                }
+                for t in response.tournaments
+            ]
+        except Exception as e:
+            logger.error(f'Ошибка при получении турниров из Java API: {str(e)}')
+            available_tournaments = []
+
         if not available_tournaments:
             logger.info('Нет доступных турниров для рекомендаций')
             return []
@@ -271,7 +273,7 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
         try:
             profile = self.user_profiles[user_id]
             profile_vector = self.vectorizer.fit_transform([profile.get_vector()])
-            
+
             # Фильтруем турниры по контексту
             if context and 'sport' in context:
                 sport = context['sport']
@@ -282,24 +284,24 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
                     ]
                 else:
                     logger.info(f'Контекстный фильтр по спорту: {sport} не поддерживается')
-            
+
             # Векторизация турниров
             tournament_vectors = self.vectorizer.transform([
                 self._tournament_to_text(t) for t in available_tournaments
             ])
-            
+
             # Расчет схожести
             similarities = cosine_similarity(profile_vector, tournament_vectors)[0]
-            
+
             # Сортируем турниры по схожести
             tournament_scores = list(zip(available_tournaments, similarities))
             tournament_scores.sort(key=lambda x: x[1], reverse=True)
-            
+
             # Возвращаем топ-N рекомендаций
             if not tournament_scores:
                 logger.info(f'Нет подходящих турниров для пользователя {user_id}')
                 return []
-                
+
             return [
                 {
                     'item_id': t[0]['id'],
@@ -315,105 +317,7 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
             ]
         except Exception as e:
             logger.error(f'Ошибка при генерации рекомендаций: {str(e)}')
-            # В случае ошибки возвращаем пустой список рекомендаций
             return []
-    
-    def _get_available_tournaments(self):
-        # В реальном приложении это будет запрос к Java API
-        # Здесь возвращаем тестовые данные для всех видов спорта
-        return [
-            {
-                'id': 't1',
-                'name': 'Champions League 2025',
-                'sport': 'football',
-                'city': 'Москва',
-                'description': 'Крупнейший футбольный турнир Европы'
-            },
-            {
-                'id': 't2',
-                'name': 'National Cup 2025',
-                'sport': 'football',
-                'city': 'Санкт-Петербург',
-                'description': 'Национальный кубок по футболу'
-            },
-            {
-                'id': 't3',
-                'name': 'Basketball Supercup',
-                'sport': 'basketball',
-                'city': 'Казань',
-                'description': 'Суперкубок по баскетболу среди любителей'
-            },
-            {
-                'id': 't4',
-                'name': 'Hockey Winter Classic',
-                'sport': 'hockey',
-                'city': 'Екатеринбург',
-                'description': 'Зимний хоккейный турнир'
-            },
-            {
-                'id': 't5',
-                'name': 'Volleyball Open',
-                'sport': 'volleyball',
-                'city': 'Новосибирск',
-                'description': 'Открытый турнир по волейболу'
-            },
-            {
-                'id': 't6',
-                'name': 'Tennis Masters',
-                'sport': 'tennis',
-                'city': 'Сочи',
-                'description': 'Мастерс по теннису'
-            },
-            {
-                'id': 't7',
-                'name': 'Table Tennis Cup',
-                'sport': 'table_tennis',
-                'city': 'Калуга',
-                'description': 'Кубок по настольному теннису'
-            },
-            {
-                'id': 't8',
-                'name': 'Badminton Challenge',
-                'sport': 'badminton',
-                'city': 'Томск',
-                'description': 'Челлендж по бадминтону'
-            },
-            {
-                'id': 't9',
-                'name': 'Chess Grand Prix',
-                'sport': 'chess',
-                'city': 'Москва',
-                'description': 'Гран-при по шахматам'
-            },
-            {
-                'id': 't10',
-                'name': 'Darts League',
-                'sport': 'darts',
-                'city': 'Тула',
-                'description': 'Лига по дартсу'
-            },
-            {
-                'id': 't11',
-                'name': 'Pool Masters',
-                'sport': 'pool',
-                'city': 'Воронеж',
-                'description': 'Мастерс по пулу'
-            },
-            {
-                'id': 't12',
-                'name': 'Bowling Cup',
-                'sport': 'bowling',
-                'city': 'Самара',
-                'description': 'Кубок по боулингу'
-            },
-            {
-                'id': 't13',
-                'name': 'Curling Open',
-                'sport': 'curling',
-                'city': 'Красноярск',
-                'description': 'Открытый турнир по кёрлингу'
-            }
-        ]
     
     def _tournament_to_text(self, tournament):
         # Улучшенное текстовое представление турнира
@@ -442,10 +346,10 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
         )
 
     # --- Для будущей интеграции с Java API ---
-    def _get_user_profile_from_java(self, user_id):
-        participation = self.java_api_client.get_user_participation(user_id)
-        teams = self.java_api_client.get_user_teams(user_id)
-        search_history = self.java_api_client.get_user_search_history(user_id)
-        # Соберите профиль пользователя из этих данных
-        # return UserProfile(...)
-        return None  # Пока не используется 
+    # def _get_user_profile_from_java(self, user_id):
+    #     participation = self.java_api_client.get_user_participation(user_id)
+    #     teams = self.java_api_client.get_user_teams(user_id)
+    #     search_history = self.java_api_client.get_user_search_history(user_id)
+    #     # Соберите профиль пользователя из этих данных
+    #     # return UserProfile(...)
+    #     return None  # Пока не используется 

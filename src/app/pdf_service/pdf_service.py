@@ -409,21 +409,23 @@ class PDFServicer(service_pb2_grpc.PDFServiceServicer):
     def CreateMatchPDF(self, request, context):
         task_id = str(uuid.uuid4())
         self.tasks[task_id] = {'status': 'PROCESSING'}
-        
         try:
             pdf_path = os.path.join(PDF_OUTPUT_DIR, f'{task_id}.pdf')
             self._generate_match_pdf(request, pdf_path)
-            
             self.tasks[task_id] = {
                 'status': 'COMPLETED',
                 'pdf_url': f'temp/{task_id}.pdf'
             }
-            
+            # Читаем PDF в bytes
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
             return service_pb2.PDFResponse(
                 task_id=task_id,
+                file_name=f'{task_id}.pdf',
+                file_data=pdf_bytes,
+                mime_type='application/pdf',
                 status='COMPLETED'
             )
-            
         except Exception as e:
             logger.error(f'Error creating match PDF: {str(e)}')
             self.tasks[task_id] = {
@@ -432,27 +434,32 @@ class PDFServicer(service_pb2_grpc.PDFServiceServicer):
             }
             return service_pb2.PDFResponse(
                 task_id=task_id,
+                file_name='',
+                file_data=b'',
+                mime_type='',
                 status='ERROR'
             )
     
     def CreateTournamentPDF(self, request, context):
         task_id = str(uuid.uuid4())
         self.tasks[task_id] = {'status': 'PROCESSING'}
-        
         try:
             pdf_path = os.path.join(PDF_OUTPUT_DIR, f'{task_id}.pdf')
             self._generate_tournament_pdf(request, pdf_path)
-            
             self.tasks[task_id] = {
                 'status': 'COMPLETED',
                 'pdf_url': f'temp/{task_id}.pdf'
             }
-            
+            # Читаем PDF в bytes
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
             return service_pb2.PDFResponse(
                 task_id=task_id,
+                file_name=f'{task_id}.pdf',
+                file_data=pdf_bytes,
+                mime_type='application/pdf',
                 status='COMPLETED'
             )
-            
         except Exception as e:
             logger.error(f'Error creating tournament PDF: {str(e)}')
             self.tasks[task_id] = {
@@ -461,6 +468,9 @@ class PDFServicer(service_pb2_grpc.PDFServiceServicer):
             }
             return service_pb2.PDFResponse(
                 task_id=task_id,
+                file_name='',
+                file_data=b'',
+                mime_type='',
                 status='ERROR'
             )
     
