@@ -11,6 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 from datetime import datetime, timedelta
 from test_data.sample_items import load_sample_items
+import grpc
 
 logger = logging.getLogger(__name__)
 
@@ -161,58 +162,87 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
             'tennis', 'table_tennis', 'badminton', 'chess',
             'darts', 'pool', 'bowling', 'curling'
         ]
+
+        # Настройка gRPC клиента для Java-сервиса
+        java_service_host = 'app'
+        java_service_port = '9090'
+        java_service_address = f"{java_service_host}:{java_service_port}"
+        logger.info(f"Подключение к Java-сервису по адресу: {java_service_address}")
+        
+        # Создание канала для связи с Java-сервисом
+        self.java_channel = grpc.insecure_channel(java_service_address)
+        # Создание клиента для RecommenderService
+        self.java_recommender_client = service_pb2_grpc.RecommenderServiceStub(self.java_channel)
+        
+        logger.info("RecommenderServicer инициализирован успешно")
     
     def GetRecommendations(self, request, context):
         user_id = request.user_id
         num_recommendations = request.num_recommendations
+        logger.info(f"Получен запрос на рекомендации для пользователя {user_id}, количество: {num_recommendations}")
         
-        # Проверка кэша
-        cached_recommendations = self._get_cached_recommendations(user_id)
-        if cached_recommendations:
-            return self._create_response(cached_recommendations)
-        
-        # Генерация рекомендаций
-        recommendations = self._generate_recommendations(
-            user_id,
-            num_recommendations,
-            request.context
-        )
-        
-        # Кэширование результатов
-        self._cache_recommendations(user_id, recommendations)
-        
-        return self._create_response(recommendations)
+        try:
+            # Проверка кэша
+            cached_recommendations = self._get_cached_recommendations(user_id)
+            if cached_recommendations:
+                logger.info(f"Найдены кэшированные рекомендации для пользователя {user_id}")
+                return self._create_response(cached_recommendations)
+            
+            # Генерация рекомендаций
+            logger.info(f"Генерация новых рекомендаций для пользователя {user_id}")
+            recommendations = self._generate_recommendations(
+                user_id,
+                num_recommendations,
+                request.context
+            )
+            
+            # Кэширование результатов
+            if recommendations:
+                logger.info(f"Сгенерировано {len(recommendations)} рекомендаций для пользователя {user_id}")
+                self._cache_recommendations(user_id, recommendations)
+            else:
+                logger.warning(f"Не удалось сгенерировать рекомендации для пользователя {user_id}")
+            
+            response = self._create_response(recommendations)
+            logger.info(f"Отправка ответа с {len(response.recommendations)} рекомендациями")
+            return response
+        except Exception as e:
+            logger.error(f"Ошибка при обработке запроса на рекомендации: {str(e)}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Внутренняя ошибка сервера: {str(e)}")
+            return service_pb2.RecommendationResponse(recommendations=[])
     
     def UpdateUserData(self, request, context):
-        user_id = request.user_id
-        user_data = request.user_data
+        """
+        Проксирует запрос на обновление данных пользователя в Java-сервис
+        """
+        logger.info(f"Получен запрос на обновление данных пользователя {request.user_id}")
         try:
-            # Проверка на обязательные поля
-            if not user_data.name or not user_data.surname:
-                logger.warning(f'Пустое имя или фамилия пользователя user_id={user_id}')
-            if not user_data.teams:
-                logger.info(f'У пользователя {user_id} нет команд')
-            if not user_data.tournaments:
-                logger.info(f'У пользователя {user_id} нет турниров')
-            if not user_data.org_info:
-                logger.info(f'У пользователя {user_id} нет информации об организациях')
-            # Создаем или обновляем профиль пользователя
-            if user_id not in self.user_profiles:
-                self.user_profiles[user_id] = UserProfile()
-            profile = self.user_profiles[user_id]
-            profile.update_from_proto(user_data)
-            # Инвалидация кэша
-            self.redis_client.delete(f'recommendations:{user_id}')
-            return service_pb2.UserDataResponse(
-                user_id=user_id,
-                user_data=user_data
-            )
+            # Перенаправляем запрос в Java-сервис
+            response = self.java_recommender_client.UpdateUserData(request)
+            logger.info(f"Данные пользователя {request.user_id} успешно обновлены в Java-сервисе")
+            return response
         except Exception as e:
-            logger.error(f'Error updating user data: {str(e)}')
-            return service_pb2.UserDataResponse(
-                user_id=user_id,
-                user_data=None
-            )
+            logger.error(f"Ошибка при обновлении данных пользователя в Java-сервисе: {str(e)}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Ошибка при обновлении данных пользователя: {str(e)}")
+            return service_pb2.UserDataResponse(user_id=request.user_id, user_data=None)
+    
+    def GetAvailableTournaments(self, request, context):
+        """
+        Проксирует запрос на получение доступных турниров в Java-сервис
+        """
+        logger.info("Получен запрос на получение доступных турниров")
+        try:
+            # Перенаправляем запрос в Java-сервис
+            response = self.java_recommender_client.GetAvailableTournaments(request)
+            logger.info(f"Получено {len(response.tournaments)} турниров от Java-сервиса")
+            return response
+        except Exception as e:
+            logger.error(f"Ошибка при получении турниров из Java-сервиса: {str(e)}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Ошибка при получении турниров: {str(e)}")
+            return service_pb2.TournamentsResponse(tournaments=[])
     
     def _get_cached_recommendations(self, user_id):
         cached_data = self.redis_client.get(f'recommendations:{user_id}')
@@ -231,48 +261,62 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
         if user_id not in self.user_profiles:
             logger.warning(f'Нет профиля пользователя для user_id={user_id}')
             return []
-        profile = self.user_profiles[user_id]
-        profile_vector = self.vectorizer.fit_transform([profile.get_vector()])
+
         # Получаем доступные турниры
         available_tournaments = self._get_available_tournaments()
         if not available_tournaments:
             logger.info('Нет доступных турниров для рекомендаций')
             return []
-        # Фильтруем турниры по контексту
-        if context and 'sport' in context:
-            sport = context['sport']
-            if sport in self.supported_sports:
-                available_tournaments = [
-                    t for t in available_tournaments
-                    if t.get('sport') == sport
-                ]
-            else:
-                logger.info(f'Контекстный фильтр по спорту: {sport} не поддерживается')
-        # Векторизация турниров
-        tournament_vectors = self.vectorizer.transform([
-            self._tournament_to_text(t) for t in available_tournaments
-        ])
-        # Расчет схожести
-        similarities = cosine_similarity(profile_vector, tournament_vectors)[0]
-        # Сортируем турниры по схожести
-        tournament_scores = list(zip(available_tournaments, similarities))
-        tournament_scores.sort(key=lambda x: x[1], reverse=True)
-        # Возвращаем топ-N рекомендаций
-        if not tournament_scores:
-            logger.info(f'Нет подходящих турниров для пользователя {user_id}')
-        return [
-            {
-                'item_id': t[0]['id'],
-                'score': float(t[1]),
-                'metadata': {
-                    'name': t[0]['name'],
-                    'sport': t[0]['sport'],
-                    'city': t[0].get('city', ''),
-                    'description': t[0].get('description', '')
+
+        try:
+            profile = self.user_profiles[user_id]
+            profile_vector = self.vectorizer.fit_transform([profile.get_vector()])
+            
+            # Фильтруем турниры по контексту
+            if context and 'sport' in context:
+                sport = context['sport']
+                if sport in self.supported_sports:
+                    available_tournaments = [
+                        t for t in available_tournaments
+                        if t.get('sport') == sport
+                    ]
+                else:
+                    logger.info(f'Контекстный фильтр по спорту: {sport} не поддерживается')
+            
+            # Векторизация турниров
+            tournament_vectors = self.vectorizer.transform([
+                self._tournament_to_text(t) for t in available_tournaments
+            ])
+            
+            # Расчет схожести
+            similarities = cosine_similarity(profile_vector, tournament_vectors)[0]
+            
+            # Сортируем турниры по схожести
+            tournament_scores = list(zip(available_tournaments, similarities))
+            tournament_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Возвращаем топ-N рекомендаций
+            if not tournament_scores:
+                logger.info(f'Нет подходящих турниров для пользователя {user_id}')
+                return []
+                
+            return [
+                {
+                    'item_id': t[0]['id'],
+                    'score': float(t[1]),
+                    'metadata': {
+                        'name': t[0]['name'],
+                        'sport': t[0]['sport'],
+                        'city': t[0].get('city', ''),
+                        'description': t[0].get('description', '')
+                    }
                 }
-            }
-            for t in tournament_scores[:num_recommendations]
-        ]
+                for t in tournament_scores[:num_recommendations]
+            ]
+        except Exception as e:
+            logger.error(f'Ошибка при генерации рекомендаций: {str(e)}')
+            # В случае ошибки возвращаем пустой список рекомендаций
+            return []
     
     def _get_available_tournaments(self):
         # В реальном приложении это будет запрос к Java API
@@ -383,12 +427,15 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
         return text
     
     def _create_response(self, recommendations):
+        print("I'm in response")
         return service_pb2.RecommendationResponse(
             recommendations=[
                 service_pb2.Recommendation(
                     item_id=rec['item_id'],
                     score=rec['score'],
-                    metadata=rec['metadata']
+                    metadata={
+                        k: str(v) for k, v in rec['metadata'].items()
+                    }
                 )
                 for rec in recommendations
             ]
