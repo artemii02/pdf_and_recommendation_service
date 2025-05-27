@@ -8,7 +8,7 @@ import service_pb2_grpc
 def test_recommender_service():
     channel = grpc.insecure_channel('localhost:50051')
     stub = service_pb2_grpc.RecommenderServiceStub(channel)
-
+    
     # Тестовые пользователи для всех видов спорта и с разными вариантами заполнения
     test_users = [
         {
@@ -102,7 +102,7 @@ def test_recommender_service():
         )
         update_response = stub.UpdateUserData(update_request)
         print(f'Обновление данных: {"успешно" if update_response.user_data else "ошибка"}')
-
+        
         # Получение рекомендаций
         rec_request = service_pb2.RecommendationRequest(
             user_id=user['user_id'],

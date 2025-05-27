@@ -169,7 +169,39 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
         logger.info(f"Получен запрос на рекомендации для пользователя {user_id}, количество: {num_recommendations}")
         
         try:
-            # Проверка кэша
+            # Проверяем наличие профиля в кэше
+            cached_profile = self.redis_client.get(f'user_profile:{user_id}')
+            if not cached_profile:
+                logger.info(f"Профиль пользователя {user_id} не найден в кэше, запрашиваем данные из Java API")
+                # Запрашиваем данные пользователя через Java API
+                user_data_request = service_pb2.UserDataRequest(user_id=user_id)
+                try:
+                    user_data_response = self.java_recommender_client.UpdateUserData(user_data_request)
+                    
+                    if not user_data_response or not user_data_response.user_data:
+                        logger.error(f"Не удалось получить данные пользователя {user_id} из Java API")
+                        return service_pb2.RecommendationResponse(recommendations=[])
+                    
+                    # Создаем новый профиль пользователя
+                    user_profile = UserProfile()
+                    user_profile.update_from_proto(user_data_response.user_data)
+                    self.user_profiles[user_id] = user_profile
+                    
+                    # Кэшируем профиль
+                    self.redis_client.setex(
+                        f'user_profile:{user_id}',
+                        self.cache_ttl,
+                        json.dumps({
+                            'profile': user_profile.get_vector(),
+                            'last_update': user_profile.last_update.isoformat()
+                        })
+                    )
+                    
+                except grpc.RpcError as e:
+                    logger.error(f"Ошибка при получении данных пользователя {user_id}: {str(e)}")
+                    return service_pb2.RecommendationResponse(recommendations=[])
+            
+            # Проверка кэша рекомендаций
             cached_recommendations = self._get_cached_recommendations(user_id)
             if cached_recommendations:
                 logger.info(f"Найдены кэшированные рекомендации для пользователя {user_id}")
@@ -345,11 +377,34 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
             ]
         )
 
-    # --- Для будущей интеграции с Java API ---
-    # def _get_user_profile_from_java(self, user_id):
-    #     participation = self.java_api_client.get_user_participation(user_id)
-    #     teams = self.java_api_client.get_user_teams(user_id)
-    #     search_history = self.java_api_client.get_user_search_history(user_id)
-    #     # Соберите профиль пользователя из этих данных
-    #     # return UserProfile(...)
-    #     return None  # Пока не используется 
+    def _update_user_profile(self, user_id, user_data):
+        """Обновляет профиль пользователя и сохраняет его в кэш"""
+        try:
+            # Создаем новый профиль
+            profile = UserProfile()
+            profile.update_from_proto(user_data)
+            
+            # Сохраняем профиль в памяти
+            self.user_profiles[user_id] = profile
+            
+            # Кэшируем профиль в Redis
+            profile_data = {
+                'name': profile.name,
+                'surname': profile.surname,
+                'org_info': profile.org_info,
+                'teams': profile.teams,
+                'tournaments': profile.tournaments,
+                'sports_preferences': profile.sports_preferences,
+                'last_update': profile.last_update.isoformat()
+            }
+            
+            self.redis_client.setex(
+                f'user_profile:{user_id}',
+                self.cache_ttl,
+                json.dumps(profile_data)
+            )
+            
+            logger.info(f"Профиль пользователя {user_id} успешно обновлен и закэширован")
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении профиля пользователя {user_id}: {str(e)}")
+            raise

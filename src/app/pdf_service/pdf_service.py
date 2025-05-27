@@ -47,15 +47,7 @@ class SportPDFGenerator:
             'football': self._generate_football_pdf,
             'basketball': self._generate_basketball_pdf,
             'hockey': self._generate_hockey_pdf,
-            'volleyball': self._generate_volleyball_pdf,
-            'tennis': self._generate_tennis_pdf,
-            'table_tennis': self._generate_table_tennis_pdf,
-            'badminton': self._generate_badminton_pdf,
-            'chess': self._generate_chess_pdf,
-            'darts': self._generate_darts_pdf,
-            'pool': self._generate_pool_pdf,
-            'bowling': self._generate_bowling_pdf,
-            'curling': self._generate_curling_pdf
+            'volleyball': self._generate_volleyball_pdf
         }
     
     def generate(self, template_id, data, canvas):
@@ -296,35 +288,27 @@ class SportPDFGenerator:
         self._draw_watermark(c)
     
     def _generate_tennis_pdf(self, data, c):
-        # Реализация для тенниса
         pass
 
     def _generate_table_tennis_pdf(self, data, c):
-        # Реализация для настольного тенниса
         pass
 
     def _generate_badminton_pdf(self, data, c):
-        # Реализация для бадминтона
         pass
 
     def _generate_chess_pdf(self, data, c):
-        # Реализация для шахмат
         pass
 
     def _generate_darts_pdf(self, data, c):
-        # Реализация для дартса
         pass
 
     def _generate_pool_pdf(self, data, c):
-        # Реализация для пула
         pass
 
     def _generate_bowling_pdf(self, data, c):
-        # Реализация для боулинга
         pass
 
     def _generate_curling_pdf(self, data, c):
-        # Реализация для кёрлинга
         pass
     
     def _draw_rating_table(self, c, ratings, x, y):
@@ -625,15 +609,7 @@ class PDFServicer(service_pb2_grpc.PDFServiceServicer):
             'football': 'Футбол',
             'basketball': 'Баскетбол',
             'hockey': 'Хоккей',
-            'volleyball': 'Волейбол',
-            'tennis': 'Теннис',
-            'table_tennis': 'Настольный теннис',
-            'badminton': 'Бадминтон',
-            'chess': 'Шахматы',
-            'darts': 'Дартс',
-            'pool': 'Пул',
-            'bowling': 'Боулинг',
-            'curling': 'Кёрлинг'
+            'volleyball': 'Волейбол'
         }
         # Цветная шапка
         c.setFillColorRGB(0.2, 0.3, 0.7)
