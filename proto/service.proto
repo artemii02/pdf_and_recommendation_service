@@ -135,12 +135,13 @@ message GroupInfo {
 }
 
 message TournamentInfo {
-  string name = 1;
-  bytes logo = 2;
-  string organization_name = 3;
-  string sport = 4;
-  string city = 5;
-  string description = 6;
+  string id = 1;
+  string name = 2;
+  bytes logo = 3;
+  string organization_name = 4;
+  string sport = 5;
+  string city = 6;
+  string description = 7;
 }
 
 // Запрос рекомендаций

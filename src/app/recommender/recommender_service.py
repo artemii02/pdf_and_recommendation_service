@@ -286,7 +286,7 @@ class RecommenderServicer(service_pb2_grpc.RecommenderServiceServicer):
             response = self.java_recommender_client.GetAvailableTournaments(service_pb2.Empty())
             available_tournaments = [
                 {
-                    'id': t.name,  # Используйте t.id, если есть, иначе t.name
+                    'id': t.id,  
                     'name': t.name,
                     'sport': t.sport,
                     'city': t.city,

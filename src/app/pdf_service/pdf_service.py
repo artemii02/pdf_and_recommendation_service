@@ -24,6 +24,11 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Image
 import requests
 from io import BytesIO
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import Flowable
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,46 @@ MAIN_FONT = 'DejaVuSans'
 BOLD_FONT = 'DejaVuSans-Bold'
 ITALIC_FONT = 'DejaVuSans-Oblique'
 BOLD_ITALIC_FONT = 'DejaVuSans-BoldOblique'
+
+# Словарь для перевода видов спорта на русский (только 4 вида)
+SPORT_RU = {
+    'football': 'Футбол',
+    'basketball': 'Баскетбол',
+    'hockey': 'Хоккей',
+    'volleyball': 'Волейбол',
+}
+
+class ScoreBox(Flowable):
+    def __init__(self, score_text, width=2.2*inch, height=0.85*inch, font_size=40):
+        super().__init__()
+        self.score_text = score_text
+        self.width = width
+        self.height = height
+        self.font_size = font_size
+        self.font_name = BOLD_FONT
+        self.bg_color = colors.HexColor('#e6eaf5')
+        self.border_color = colors.HexColor('#334488')
+        self.text_color = colors.HexColor('#222')
+
+    def wrap(self, availWidth, availHeight):
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        # Фон
+        c.setFillColor(self.bg_color)
+        c.rect(0, 0, self.width, self.height, fill=1, stroke=0)
+        # Рамка
+        c.setStrokeColor(self.border_color)
+        c.setLineWidth(2)
+        c.rect(0, 0, self.width, self.height, fill=0, stroke=1)
+        # Текст счета
+        c.setFont(self.font_name, self.font_size)
+        c.setFillColor(self.text_color)
+        text_width = c.stringWidth(self.score_text, self.font_name, self.font_size)
+        x = (self.width - text_width) / 2
+        y = (self.height - self.font_size) / 2 + 6  # +6 для лучшего визуального центрирования
+        c.drawString(x, y, self.score_text)
 
 class SportPDFGenerator:
     def __init__(self):
@@ -487,164 +532,209 @@ class PDFServicer(service_pb2_grpc.PDFServiceServicer):
         c.restoreState()
 
     def _generate_match_pdf(self, match_data, output_path):
-        c = canvas.Canvas(output_path, pagesize=letter)
-        width, height = letter
-        # Цветной фон заголовка
-        c.setFillColorRGB(0.2, 0.3, 0.7)
-        c.rect(0, height-80, width, 80, fill=1, stroke=0)
-        # Заголовок
-        c.setFont(BOLD_FONT, 28)
-        c.setFillColorRGB(1, 1, 1)
-        title = f"Матч: {match_data.teams[0].name} vs {match_data.teams[1].name}" if match_data.teams and len(match_data.teams) >= 2 else "Данные о командах отсутствуют"
-        c.drawString(50, height-60, title)
-        # Счет
-        c.setFont(BOLD_FONT, 40)
-        c.setFillColorRGB(0.1, 0.1, 0.1)
-        c.drawCentredString(width/2, height-120, f"{getattr(match_data.score, 'team_1', 0) if hasattr(match_data, 'score') and match_data.score else 0} - {getattr(match_data.score, 'team_2', 0) if hasattr(match_data, 'score') and match_data.score else 0}")
-        y = height-170
-        # Разделитель
-        c.setStrokeColorRGB(0.2, 0.3, 0.7)
-        c.setLineWidth(2)
-        c.line(40, y, width-40, y)
-        y -= 25
+        # Стили
+        styles = getSampleStyleSheet()
+        styleN = styles['Normal']
+        styleN.fontName = MAIN_FONT
+        styleN.fontSize = 12
+        styleN.leading = 14
+        styleB = styles['Heading1']
+        styleB.fontName = BOLD_FONT
+        styleB.fontSize = 22
+        styleB.alignment = TA_CENTER
+        styleTitle = ParagraphStyle('Title', fontName=BOLD_FONT, fontSize=22, alignment=TA_CENTER, textColor=colors.white, spaceAfter=12, leading=26)
+        styleHeader = ParagraphStyle('Header', fontName=BOLD_FONT, fontSize=16, alignment=TA_LEFT, textColor=colors.HexColor('#334488'))
+        styleTableHeader = ParagraphStyle('TableHeader', fontName=BOLD_FONT, fontSize=13, alignment=TA_CENTER, textColor=colors.whitesmoke)
+        styleTableCell = ParagraphStyle('TableCell', fontName=MAIN_FONT, fontSize=12, alignment=TA_CENTER)
+        styleScore = ParagraphStyle('Score', fontName=BOLD_FONT, fontSize=40, alignment=TA_CENTER, textColor=colors.HexColor('#222'))
+
+        elements = []
+        # Шапка с логотипами и названием
+        logos = []
+        for team in getattr(match_data, 'teams', []):
+            if hasattr(team, 'logo') and team.logo:
+                try:
+                    img = Image(BytesIO(bytes(team.logo)), width=0.5*inch, height=0.5*inch)
+                    logos.append(img)
+                except Exception:
+                    pass
+        sport_en = getattr(match_data, 'sport', None)
+        sport_ru = SPORT_RU.get(sport_en.lower(), sport_en.capitalize() if sport_en else '') if sport_en else ''
+        title_text = f"{sport_ru}: {match_data.teams[0].name} vs {match_data.teams[1].name}" if match_data.teams and len(match_data.teams) >= 2 else "Данные о командах отсутствуют"
+        title_paragraph = Paragraph(title_text, styleTitle)
+        # Формируем шапку как таблицу с цветным фоном и увеличенной высотой
+        if len(logos) == 2:
+            data = [[logos[0], title_paragraph, logos[1]]]
+            col_widths = [0.8*inch, 4.4*inch, 0.8*inch]
+        elif len(logos) == 1:
+            data = [[logos[0], title_paragraph, '']]
+            col_widths = [0.8*inch, 5.2*inch, 0.0*inch]
+        else:
+            data = [[title_paragraph]]
+            col_widths = [6*inch]
+        table = Table(data, colWidths=col_widths, rowHeights=[0.9*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#334488')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 0.18*inch))
+        # Основная информация (дата, место проведения)
+        info = []
+        if hasattr(match_data, 'date') and match_data.date:
+            try:
+                match_date = datetime.fromisoformat(match_data.date.replace('Z', '+00:00'))
+                info.append(f"Дата: {match_date.strftime('%d.%m.%Y %H:%M')}")
+            except Exception:
+                info.append(f"Дата: {getattr(match_data, 'date', '-')}")
+        if hasattr(match_data, 'location') and match_data.location:
+            info.append(f"Место проведения: {getattr(match_data.location, 'name', '-')}, {getattr(match_data.location, 'address', '-')}, {getattr(match_data.location, 'city', '-')}")
+        elements.append(Paragraph('<br/>'.join(info), styleN))
+        elements.append(Spacer(1, 0.12*inch))
+        # Счет — кастомный ScoreBox по центру страницы
+        score = f"{getattr(match_data.score, 'team_1', 0) if hasattr(match_data, 'score') and match_data.score else 0} - {getattr(match_data.score, 'team_2', 0) if hasattr(match_data, 'score') and match_data.score else 0}"
+        score_box = ScoreBox(score)
+        score_table = Table([[score_box]], colWidths=[6*inch])
+        score_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        elements.append(score_table)
+        elements.append(Spacer(1, 0.18*inch))
         # Таблица голов
-        c.setFont(BOLD_FONT, 16)
-        c.drawString(50, y, "Голы:")
-        y -= 20
-        c.setFont(MAIN_FONT, 12)
+        elements.append(Paragraph("Голы:", styleHeader))
+        data = [[Paragraph("Время", styleTableHeader), Paragraph("Команда", styleTableHeader), Paragraph("Игрок", styleTableHeader), Paragraph("Пенальти", styleTableHeader)]]
         if hasattr(match_data, 'goals') and match_data.goals:
-            data = [["Время", "Команда", "Игрок", "Пенальти"]]
             for goal in match_data.goals:
                 team = next((t for t in match_data.teams if t.team_id == goal.team_id), None)
                 team_name = team.name if team else 'Неизвестная команда'
                 data.append([
-                    getattr(goal, 'time', '-'),
-                    team_name,
-                    getattr(goal, 'user_id', '-'),
-                    "Да" if getattr(goal, 'is_penalty', False) else "Нет"
+                    Paragraph(str(getattr(goal, 'time', '-')), styleTableCell),
+                    Paragraph(team_name, styleTableCell),
+                    Paragraph(getattr(goal, 'user_id', '-'), styleTableCell),
+                    Paragraph("Да" if getattr(goal, 'is_penalty', False) else "Нет", styleTableCell)
                 ])
-            table = Table(data, colWidths=[60, 120, 100, 60])
-            style = TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
-                ('FONTSIZE', (0, 0), (-1, 0), 13),
-                ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
-                ('FONTSIZE', (0, 1), (-1, -1), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.grey)
-            ])
-            table.setStyle(style)
-            table.wrapOn(c, 0, 0)
-            table.drawOn(c, 50, y-table._height)
-            y -= table._height + 18  # увеличенный отступ
         else:
-            c.drawString(70, y, "Нет данных о голах")
-            y -= 20
+            data.append([Paragraph("-", styleTableCell)]*4)
+        table = Table(data, colWidths=[0.9*inch, 1.7*inch, 1.5*inch, 0.9*inch], repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
+            ('FONTSIZE', (0, 0), (-1, 0), 13),
+            ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
+            ('FONTSIZE', (0, 1), (-1, -1), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 0.15*inch))
         # Таблица пенальти
-        c.setFont(BOLD_FONT, 16)
-        c.drawString(50, y, "Пенальти:")
-        y -= 20
-        c.setFont(MAIN_FONT, 12)
+        elements.append(Paragraph("Пенальти:", styleHeader))
+        data = [[Paragraph("Команда", styleTableHeader), Paragraph("Игрок", styleTableHeader), Paragraph("Результат", styleTableHeader)]]
         if hasattr(match_data, 'after_match_penalties') and match_data.after_match_penalties:
-            data = [["Команда", "Игрок", "Результат"]]
             for penalty in match_data.after_match_penalties:
                 team = next((t for t in match_data.teams if t.team_id == penalty.team_id), None)
                 team_name = team.name if team else 'Неизвестная команда'
                 result = "Забит" if getattr(penalty, 'is_success', False) else "Не забит"
-                data.append([team_name, getattr(penalty, 'user_id', '-'), result])
-            table = Table(data, colWidths=[120, 100, 80])
-            style = TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
-                ('FONTSIZE', (0, 0), (-1, 0), 13),
-                ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
-                ('FONTSIZE', (0, 1), (-1, -1), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.grey)
-            ])
-            table.setStyle(style)
-            table.wrapOn(c, 0, 0)
-            table.drawOn(c, 50, y-table._height)
-            y -= table._height + 18  # увеличенный отступ
+                data.append([
+                    Paragraph(team_name, styleTableCell),
+                    Paragraph(getattr(penalty, 'user_id', '-'), styleTableCell),
+                    Paragraph(result, styleTableCell)
+                ])
         else:
-            c.drawString(70, y, "Нет информации о пенальти")
-            y -= 20
-        # Место проведения
-        c.setFont(BOLD_FONT, 14)
-        c.drawString(50, y, "Место проведения:")
-        y -= 18
-        c.setFont(MAIN_FONT, 12)
-        if hasattr(match_data, 'location') and match_data.location:
-            c.drawString(70, y, f"{getattr(match_data.location, 'name', '-')}")
-            y -= 15
-            c.drawString(70, y, f"{getattr(match_data.location, 'address', '-')}")
-            y -= 15
-            c.drawString(70, y, f"{getattr(match_data.location, 'city', '-')}")
-            y -= 15
-        else:
-            c.drawString(70, y, "Нет данных о месте проведения")
-            y -= 15
-        # Дата
-        y -= 10
-        c.setFont(MAIN_FONT, 12)
-        if hasattr(match_data, 'date') and match_data.date:
-            try:
-                match_date = datetime.fromisoformat(match_data.date.replace('Z', '+00:00'))
-                c.drawString(50, y, f"Дата: {match_date.strftime('%d.%m.%Y %H:%M')}")
-            except Exception as e:
-                c.drawString(50, y, f"Дата: {getattr(match_data, 'date', '-')}")
-        else:
-            c.drawString(50, y, "Дата: -")
-        # Водяной знак
-        PDFServicer._draw_watermark(c)
-        c.save()
-    
+            data.append([Paragraph("-", styleTableCell)]*3)
+        table = Table(data, colWidths=[1.7*inch, 1.5*inch, 1.1*inch], repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
+            ('FONTSIZE', (0, 0), (-1, 0), 13),
+            ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
+            ('FONTSIZE', (0, 1), (-1, -1), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 0.15*inch))
+        # Водяной знак (будет добавлен на каждую страницу через onPage)
+        def add_watermark(canvas, doc):
+            canvas.saveState()
+            watermark_text = "Онлайн-платформа для поиска и управления любительскими спортивными соревнованиями"
+            canvas.setFont(ITALIC_FONT, 12)
+            canvas.setFillColorRGB(0.7, 0.7, 0.7, alpha=0.18)
+            text_width = canvas.stringWidth(watermark_text, ITALIC_FONT, 12)
+            x = max((letter[0] - text_width) / 2, 0)
+            y = 25
+            canvas.drawString(x, y, watermark_text)
+            canvas.restoreState()
+        doc = SimpleDocTemplate(output_path, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+        doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
+
     def _generate_tournament_pdf(self, tournament_data, output_path):
-        c = canvas.Canvas(output_path, pagesize=letter)
-        width, height = letter
-        # Словарь для перевода видов спорта
-        sport_ru = {
-            'football': 'Футбол',
-            'basketball': 'Баскетбол',
-            'hockey': 'Хоккей',
-            'volleyball': 'Волейбол'
-        }
-        # Цветная шапка
-        c.setFillColorRGB(0.2, 0.3, 0.7)
-        c.rect(0, height-80, width, 80, fill=1, stroke=0)
-        # Заголовок
-        c.setFont(BOLD_FONT, 28)
-        c.setFillColorRGB(1, 1, 1)
-        c.drawString(50, height-60, getattr(tournament_data, 'name', 'Без названия'))
+        styles = getSampleStyleSheet()
+        styleN = styles['Normal']
+        styleN.fontName = MAIN_FONT
+        styleN.fontSize = 12
+        styleN.leading = 14
+        styleB = styles['Heading1']
+        styleB.fontName = BOLD_FONT
+        styleB.fontSize = 22
+        styleB.alignment = TA_CENTER
+        styleTitle = ParagraphStyle('Title', fontName=BOLD_FONT, fontSize=22, alignment=TA_CENTER, textColor=colors.white, spaceAfter=12, leading=26)
+        styleHeader = ParagraphStyle('Header', fontName=BOLD_FONT, fontSize=16, alignment=TA_LEFT, textColor=colors.HexColor('#334488'))
+        styleTableHeader = ParagraphStyle('TableHeader', fontName=BOLD_FONT, fontSize=13, alignment=TA_CENTER, textColor=colors.whitesmoke)
+        styleTableCell = ParagraphStyle('TableCell', fontName=MAIN_FONT, fontSize=12, alignment=TA_CENTER)
+        elements = []
+        # Логотип турнира (если есть)
+        logo = getattr(tournament_data, 'logo', None)
+        if logo:
+            try:
+                img = Image(BytesIO(bytes(logo)), width=0.7*inch, height=0.7*inch)
+                logo_cell = img
+            except Exception:
+                logo_cell = ''
+        else:
+            logo_cell = ''
+        title = getattr(tournament_data, 'name', 'Без названия')
+        title_paragraph = Paragraph(title, styleTitle)
+        # Шапка как таблица с цветным фоном и увеличенной высотой
+        data = [[logo_cell, title_paragraph, '']]
+        col_widths = [0.8*inch, 4.4*inch, 0.8*inch]
+        table = Table(data, colWidths=col_widths, rowHeights=[0.9*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#334488')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(table)
+        elements.append(Spacer(1, 0.15*inch))
         # Основная информация
-        c.setFont(MAIN_FONT, 14)
-        c.setFillColorRGB(0, 0, 0)
-        y = height-110
-        sport = getattr(tournament_data, 'sport', '-')
-        sport_display = sport_ru.get(sport, sport.capitalize())
-        c.drawString(50, y, f"Спорт: {sport_display}")
-        y -= 20
-        c.drawString(50, y, f"Организация: {getattr(tournament_data, 'organization_name', '-')}")
-        y -= 20
-        c.drawString(50, y, f"Город: {getattr(tournament_data, 'city', '-')}")
-        y -= 20
-        c.drawString(50, y, f"Описание: {getattr(tournament_data, 'description', '-')}")
-        y -= 30
+        sport_en = getattr(tournament_data, 'sport', '-')
+        sport_display = SPORT_RU.get(sport_en.lower(), sport_en.capitalize())
+        info = [
+            f"Спорт: {sport_display}",
+            f"Организация: {getattr(tournament_data, 'organization_name', '-')}" ,
+            f"Город: {getattr(tournament_data, 'city', '-')}" ,
+            f"Описание: {getattr(tournament_data, 'description', '-')}"
+        ]
+        elements.append(Paragraph('<br/>'.join(info), styleN))
+        elements.append(Spacer(1, 0.15*inch))
         # Этапы турнира
-        c.setFont(BOLD_FONT, 18)
-        c.drawString(50, y, "Этапы турнира:")
-        y -= 22
-        c.setFont(MAIN_FONT, 13)
+        elements.append(Paragraph("Этапы турнира:", styleHeader))
         if hasattr(tournament_data, 'stages') and tournament_data.stages:
             for stage in tournament_data.stages:
-                c.setFont(BOLD_FONT, 14)
-                c.drawString(70, y, getattr(stage, 'name', 'Без названия этапа'))
-                y -= 18
+                elements.append(Paragraph(getattr(stage, 'name', 'Без названия этапа'), styleB))
+                data = [[Paragraph("Матч", styleTableHeader), Paragraph("Счёт", styleTableHeader), Paragraph("Дата", styleTableHeader)]]
                 if hasattr(stage, 'matches') and stage.matches:
-                    c.setFont(MAIN_FONT, 12)
-                    data = [["Матч", "Счёт", "Дата"]]
                     for match in stage.matches:
                         if hasattr(match, 'teams') and len(match.teams) >= 2:
                             match_text = f"{match.teams[0].name} vs {match.teams[1].name}"
@@ -652,68 +742,69 @@ class PDFServicer(service_pb2_grpc.PDFServiceServicer):
                             match_text = "-"
                         score_text = f"{getattr(match.score, 'team_1', 0)} - {getattr(match.score, 'team_2', 0)}" if hasattr(match, 'score') and match.score else "-"
                         date_text = getattr(match, 'date', '-')
-                        data.append([match_text, score_text, date_text])
-                    table = Table(data, colWidths=[180, 60, 100])
-                    style = TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
-                        ('FONTSIZE', (0, 0), (-1, 0), 12),
-                        ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
-                        ('FONTSIZE', (0, 1), (-1, -1), 11),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.grey)
-                    ])
-                    table.setStyle(style)
-                    table.wrapOn(c, 0, 0)
-                    table.drawOn(c, 90, y-18*len(data))
-                    y -= 18*len(data) + 10
+                        data.append([
+                            Paragraph(match_text, styleTableCell),
+                            Paragraph(score_text, styleTableCell),
+                            Paragraph(date_text, styleTableCell)
+                        ])
                 else:
-                    c.setFont(ITALIC_FONT, 12)
-                    c.drawString(90, y, "Нет матчей в этом этапе")
-                    y -= 15
+                    data.append([Paragraph("-", styleTableCell)]*3)
+                table = Table(data, colWidths=[2.5*inch, 1*inch, 1.5*inch], repeatRows=1)
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
+                    ('FONTSIZE', (0, 0), (-1, 0), 13),
+                    ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
+                    ('FONTSIZE', (0, 1), (-1, -1), 12),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ]))
+                elements.append(table)
+                elements.append(Spacer(1, 0.1*inch))
         else:
-            c.setFont(ITALIC_FONT, 13)
-            c.drawString(70, y, "Нет данных об этапах")
-            y -= 15
-        y -= 20
+            elements.append(Paragraph("Нет данных об этапах", styleN))
+        elements.append(Spacer(1, 0.15*inch))
         # Группы
-        c.setFont(BOLD_FONT, 18)
-        c.drawString(50, y, "Группы:")
-        y -= 22
-        c.setFont(MAIN_FONT, 13)
+        elements.append(Paragraph("Группы:", styleHeader))
         if hasattr(tournament_data, 'groups') and tournament_data.groups:
             for group in tournament_data.groups:
-                c.setFont(BOLD_FONT, 14)
-                c.drawString(70, y, getattr(group, 'name', 'Без названия группы'))
-                y -= 18
-                c.setFont(MAIN_FONT, 12)
+                elements.append(Paragraph(getattr(group, 'name', 'Без названия группы'), styleB))
+                data = [[Paragraph("Команда", styleTableHeader), Paragraph("Вид спорта", styleTableHeader)]]
                 if hasattr(group, 'teams') and group.teams:
-                    data = [["Команда", "Вид спорта"]]
                     for team in group.teams:
-                        data.append([getattr(team, 'name', '-'), sport_ru.get(getattr(team, 'sport', '-'), getattr(team, 'sport', '-').capitalize())])
-                    table = Table(data, colWidths=[180, 100])
-                    style = TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
-                        ('FONTSIZE', (0, 0), (-1, 0), 12),
-                        ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
-                        ('FONTSIZE', (0, 1), (-1, -1), 11),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.grey)
-                    ])
-                    table.setStyle(style)
-                    table.wrapOn(c, 0, 0)
-                    table.drawOn(c, 90, y-18*len(data))
-                    y -= 18*len(data) + 10
+                        sport_disp = SPORT_RU.get(getattr(team, 'sport', '-').lower(), getattr(team, 'sport', '-').capitalize())
+                        data.append([
+                            Paragraph(getattr(team, 'name', '-'), styleTableCell),
+                            Paragraph(sport_disp, styleTableCell)
+                        ])
                 else:
-                    c.drawString(90, y, "Нет данных о командах в группе")
-                    y -= 15
+                    data.append([Paragraph("-", styleTableCell)]*2)
+                table = Table(data, colWidths=[2.5*inch, 2*inch], repeatRows=1)
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), BOLD_FONT),
+                    ('FONTSIZE', (0, 0), (-1, 0), 13),
+                    ('FONTNAME', (0, 1), (-1, -1), MAIN_FONT),
+                    ('FONTSIZE', (0, 1), (-1, -1), 12),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ]))
+                elements.append(table)
+                elements.append(Spacer(1, 0.1*inch))
         else:
-            c.setFont(ITALIC_FONT, 13)
-            c.drawString(70, y, "Нет данных о группах")
-            y -= 15
-        # Водяной знак
-        PDFServicer._draw_watermark(c)
-        c.save() 
+            elements.append(Paragraph("Нет данных о группах", styleN))
+        # Водяной знак (будет добавлен на каждую страницу через onPage)
+        def add_watermark(canvas, doc):
+            canvas.saveState()
+            watermark_text = "Онлайн-платформа для поиска и управления любительскими спортивными соревнованиями"
+            canvas.setFont(ITALIC_FONT, 12)
+            canvas.setFillColorRGB(0.7, 0.7, 0.7, alpha=0.18)
+            text_width = canvas.stringWidth(watermark_text, ITALIC_FONT, 12)
+            x = max((letter[0] - text_width) / 2, 0)
+            y = 25
+            canvas.drawString(x, y, watermark_text)
+            canvas.restoreState()
+        doc = SimpleDocTemplate(output_path, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+        doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark) 
